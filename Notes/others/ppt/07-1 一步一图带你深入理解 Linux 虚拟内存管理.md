@@ -85,11 +85,13 @@
 
 比如我们现在有这样一个简单的 Java 程序。
 
-        public static void main(String[] args) throws Exception {
-            
-            string i = args[0];
-            ..........
-        }
+```C
+    public static void main(String[] args) throws Exception {
+        
+        string i = args[0];
+        ..........
+    }
+```
 
 
 在程序代码相同的情况下，我们用这份代码同时启动三个 JVM 进程，我们暂时将进程依次命名为 a , b , c 。
@@ -273,18 +275,20 @@
 
 既然我们要介绍进程的虚拟内存空间管理，==那就离不开进程在内核中的描述符 task\_struct 结构。==
 
-    struct task_struct {
-            // 进程id
-    	    pid_t				pid;
-            // 用于标识线程所属的进程 pid
-    	    pid_t				tgid;
-            // 进程打开的文件信息
-            struct files_struct		*files;
-            // 内存描述符表示进程虚拟地址空间
-            struct mm_struct		*mm;
-    
-            .......... 省略 .......
-    }
+```C
+struct task_struct {
+        // 进程id
+	    pid_t				pid;
+        // 用于标识线程所属的进程 pid
+	    pid_t				tgid;
+        // 进程打开的文件信息
+        struct files_struct		*files;
+        // 内存描述符表示进程虚拟地址空间
+        struct mm_struct		*mm;
+
+        .......... 省略 .......
+}
+```
 
 
 在进程描述符 task\_struct 结构中，==有一个专门描述进程虚拟地址空间的内存描述符 mm\_struct 结构，这个结构体中包含了前边几个小节中介绍的进程虚拟内存空间的全部信息。==
@@ -293,109 +297,115 @@
 
 当我们调用 fork() 函数创建进程的时候，表示进程地址空间的 mm\_struct 结构会随着进程描述符 task\_struct 的创建而创建。
 
-    long _do_fork(unsigned long clone_flags,
-    	      unsigned long stack_start,
-    	      unsigned long stack_size,
-    	      int __user *parent_tidptr,
-    	      int __user *child_tidptr,
-    	      unsigned long tls)
-    {
-            ......... 省略 ..........
-    	struct pid *pid;
-    	struct task_struct *p;
-    
-            ......... 省略 ..........
-        // 为进程创建 task_struct 结构，用父进程的资源填充 task_struct 信息
-    	p = copy_process(clone_flags, stack_start, stack_size,
-    			 child_tidptr, NULL, trace, tls, NUMA_NO_NODE);
-    
-             ......... 省略 ..........
-    }
+```C
+long _do_fork(unsigned long clone_flags,
+	      unsigned long stack_start,
+	      unsigned long stack_size,
+	      int __user *parent_tidptr,
+	      int __user *child_tidptr,
+	      unsigned long tls)
+{
+        ......... 省略 ..........
+	struct pid *pid;
+	struct task_struct *p;
+
+        ......... 省略 ..........
+    // 为进程创建 task_struct 结构，用父进程的资源填充 task_struct 信息
+	p = copy_process(clone_flags, stack_start, stack_size,
+			 child_tidptr, NULL, trace, tls, NUMA_NO_NODE);
+
+         ......... 省略 ..........
+}
+```
 
 ==随后会在 copy\_process 函数中创建 task\_struct 结构，并拷贝父进程的相关资源到新进程的 task\_struct 结构里，其中就包括拷贝父进程的虚拟内存空间 mm\_struct 结构。==**这里可以看出子进程在新创建出来之后它的虚拟内存空间是和父进程的虚拟内存空间一模一样的，直接拷贝过来**。
 
-    static __latent_entropy struct task_struct *copy_process(
-    					unsigned long clone_flags,
-    					unsigned long stack_start,
-    					unsigned long stack_size,
-    					int __user *child_tidptr,
-    					struct pid *pid,
-    					int trace,
-    					unsigned long tls,
-    					int node)
-    {
-    
-        struct task_struct *p;
-        // 创建 task_struct 结构
-        p = dup_task_struct(current, node);
-    
-            ....... 初始化子进程 ...........
-    
-            ....... 开始继承拷贝父进程资源  .......      
-        // 继承父进程打开的文件描述符
-    	retval = copy_files(clone_flags, p);
-        // 继承父进程所属的文件系统
-    	retval = copy_fs(clone_flags, p);
-        // 继承父进程注册的信号以及信号处理函数
-    	retval = copy_sighand(clone_flags, p);
-    	retval = copy_signal(clone_flags, p);
-        // 继承父进程的虚拟内存空间
-    	retval = copy_mm(clone_flags, p);
-        // 继承父进程的 namespaces
-    	retval = copy_namespaces(clone_flags, p);
-        // 继承父进程的 IO 信息
-    	retval = copy_io(clone_flags, p);
-    
-          ...........省略.........
-        // 分配 CPU
-        retval = sched_fork(clone_flags, p);
-        // 分配 pid
-        pid = alloc_pid(p->nsproxy->pid_ns_for_children);
-    
-    .     ..........省略.........
-    }
+```C
+static __latent_entropy struct task_struct *copy_process(
+					unsigned long clone_flags,
+					unsigned long stack_start,
+					unsigned long stack_size,
+					int __user *child_tidptr,
+					struct pid *pid,
+					int trace,
+					unsigned long tls,
+					int node)
+{
+
+    struct task_struct *p;
+    // 创建 task_struct 结构
+    p = dup_task_struct(current, node);
+
+        ....... 初始化子进程 ...........
+
+        ....... 开始继承拷贝父进程资源  .......      
+    // 继承父进程打开的文件描述符
+	retval = copy_files(clone_flags, p);
+    // 继承父进程所属的文件系统
+	retval = copy_fs(clone_flags, p);
+    // 继承父进程注册的信号以及信号处理函数
+	retval = copy_sighand(clone_flags, p);
+	retval = copy_signal(clone_flags, p);
+    // 继承父进程的虚拟内存空间
+	retval = copy_mm(clone_flags, p);
+    // 继承父进程的 namespaces
+	retval = copy_namespaces(clone_flags, p);
+    // 继承父进程的 IO 信息
+	retval = copy_io(clone_flags, p);
+
+      ...........省略.........
+    // 分配 CPU
+    retval = sched_fork(clone_flags, p);
+    // 分配 pid
+    pid = alloc_pid(p->nsproxy->pid_ns_for_children);
+
+.     ..........省略.........
+}
+```
 
 ==这里我们重点关注 copy\_mm 函数，正是在这里完成了子进程虚拟内存空间 mm\_struct 结构的的创建以及初始化。==
 
-    static int copy_mm(unsigned long clone_flags, struct task_struct *tsk)
-    {
-        // 子进程虚拟内存空间，父进程虚拟内存空间
-    	struct mm_struct *mm, *oldmm;
-    	int retval;
-    
-            ...... 省略 ......
-    
-    	tsk->mm = NULL;
-    	tsk->active_mm = NULL;
-        // 获取父进程虚拟内存空间
-    	oldmm = current->mm;
-    	if (!oldmm)
-    		return 0;
-    
-            ...... 省略 ......
-        // 通过 vfork 或者 clone 系统调用创建出的子进程（线程）和父进程共享虚拟内存空间
-    	if (clone_flags & CLONE_VM) {
-            // 增加父进程虚拟地址空间的引用计数
-    		mmget(oldmm);
-            // 直接将父进程的虚拟内存空间赋值给子进程（线程）
-            // 线程共享其所属进程的虚拟内存空间
-    		mm = oldmm;
-    		goto good_mm;
-    	}
-    
-    	retval = -ENOMEM;
-        // 如果是 fork 系统调用创建出的子进程，则将父进程的虚拟内存空间以及相关页表拷贝到子进程中的 mm_struct 结构中。
-    	mm = dup_mm(tsk);
-    	if (!mm)
-    		goto fail_nomem;
-    
-    good_mm:
-        // 将拷贝出来的父进程虚拟内存空间 mm_struct 赋值给子进程
-    	tsk->mm = mm;
-    	tsk->active_mm = mm;
-    	return 0;
-    
-            ...... 省略 ......
+```C
+static int copy_mm(unsigned long clone_flags, struct task_struct *tsk)
+{
+    // 子进程虚拟内存空间，父进程虚拟内存空间
+	struct mm_struct *mm, *oldmm;
+	int retval;
+
+        ...... 省略 ......
+
+	tsk->mm = NULL;
+	tsk->active_mm = NULL;
+    // 获取父进程虚拟内存空间
+	oldmm = current->mm;
+	if (!oldmm)
+		return 0;
+
+        ...... 省略 ......
+    // 通过 vfork 或者 clone 系统调用创建出的子进程（线程）和父进程共享虚拟内存空间
+	if (clone_flags & CLONE_VM) {
+        // 增加父进程虚拟地址空间的引用计数
+		mmget(oldmm);
+        // 直接将父进程的虚拟内存空间赋值给子进程（线程）
+        // 线程共享其所属进程的虚拟内存空间
+		mm = oldmm;
+		goto good_mm;
+	}
+
+	retval = -ENOMEM;
+    // 如果是 fork 系统调用创建出的子进程，则将父进程的虚拟内存空间以及相关页表拷贝到子进程中的 mm_struct 结构中。
+	mm = dup_mm(tsk);
+	if (!mm)
+		goto fail_nomem;
+
+good_mm:
+    // 将拷贝出来的父进程虚拟内存空间 mm_struct 赋值给子进程
+	tsk->mm = mm;
+	tsk->active_mm = mm;
+	return 0;
+
+        ...... 省略 ......
+```
 
 
 由于本小节中我们举的示例是通过 fork() 函数创建子进程的情形，所以这里大家先占时忽略 `if (clone_flags & CLONE_VM)` 这个条件判断逻辑，我们先跳过往后看~~
@@ -426,9 +436,11 @@
 
 ==这就用到了进程的内存描述符 mm\_struct 结构体中的 task\_size 变量，task\_size 定义了用户态地址空间与内核态地址空间之间的分界线。==
 
-    struct mm_struct {
-        unsigned long task_size;	/* size of task vm space */
-    }
+```C
+struct mm_struct {
+    unsigned long task_size;	/* size of task vm space */
+}
+```
 
 
 通过前边小节的内容介绍，我们知道在 32 位系统中用户态虚拟内存空间为 3 GB，虚拟内存地址范围为：0x0000 0000 - 0xC000 000 。
@@ -441,10 +453,12 @@
 
 我们来看下内核在 `/arch/x86/include/asm/page_32_types.h` 文件中关于 TASK\_SIZE 的定义。
 
-    /*
-     * User space process size: 3GB (default).
-     */
-    #define TASK_SIZE		__PAGE_OFFSET
+```C
+/*
+ * User space process size: 3GB (default).
+ */
+#define TASK_SIZE		__PAGE_OFFSET
+```
 
 
 如下图所示：\_\_PAGE\_OFFSET 的值在 32 位系统下为 0xC000 000。
@@ -461,14 +475,16 @@
 
 ==我们来看下内核在 `/arch/x86/include/asm/page_64_types.h` 文件中关于 TASK\_SIZE 的定义。==
 
-    #define TASK_SIZE		(test_thread_flag(TIF_ADDR32) ? \
-    					IA32_PAGE_OFFSET : TASK_SIZE_MAX)
-    
-    #define TASK_SIZE_MAX		task_size_max()
-    
-    #define task_size_max()		((_AC(1,UL) << __VIRTUAL_MASK_SHIFT) - PAGE_SIZE)
-    
-    #define __VIRTUAL_MASK_SHIFT	47
+```C
+#define TASK_SIZE		(test_thread_flag(TIF_ADDR32) ? \
+					IA32_PAGE_OFFSET : TASK_SIZE_MAX)
+
+#define TASK_SIZE_MAX		task_size_max()
+
+#define task_size_max()		((_AC(1,UL) << __VIRTUAL_MASK_SHIFT) - PAGE_SIZE)
+
+#define __VIRTUAL_MASK_SHIFT	47
+```
 
 
 ​    
@@ -479,9 +495,11 @@
 
 ==PAGE\_SIZE 定义在 `/arch/x86/include/asm/page_types.h`文件中：==
 
-    /* PAGE_SHIFT determines the page size */
-    #define PAGE_SHIFT		12
-    #define PAGE_SIZE		(_AC(1,UL) << PAGE_SHIFT)
+```C
+/* PAGE_SHIFT determines the page size */
+#define PAGE_SHIFT		12
+#define PAGE_SIZE		(_AC(1,UL) << PAGE_SHIFT)
+```
 
 
 而内核空间的起始地址是 0xFFFF 8000 0000 0000 。在 0x00007FFFFFFFF000 - 0xFFFF 8000 0000 0000 之间的内存区域就是我们在 《4.2 64 位机器上进程虚拟内存空间分布》小节中介绍的 canonical address 空洞。
@@ -496,21 +514,23 @@
 
 前边我们提到，内核中采用了一个叫做内存描述符的 mm\_struct 结构体来表示进程虚拟内存空间的全部信息。在本小节中笔者就带大家到 mm\_struct 结构体内部去寻找下相关的线索。
 
-    struct mm_struct {
-        unsigned long task_size;    /* size of task vm space */
-        unsigned long start_code, end_code, start_data, end_data;
-        unsigned long start_brk, brk, start_stack;
-        unsigned long arg_start, arg_end, env_start, env_end;
-        unsigned long mmap_base;  /* base of mmap area */
-        unsigned long total_vm;    /* Total pages mapped */
-        unsigned long locked_vm;  /* Pages that have PG_mlocked set */
-        unsigned long pinned_vm;  /* Refcount permanently increased */
-        unsigned long data_vm;    /* VM_WRITE & ~VM_SHARED & ~VM_STACK */
-        unsigned long exec_vm;    /* VM_EXEC & ~VM_WRITE & ~VM_STACK */
-        unsigned long stack_vm;    /* VM_STACK */
-    
-           ...... 省略 ........
-    }
+```C
+struct mm_struct {
+    unsigned long task_size;    /* size of task vm space */
+    unsigned long start_code, end_code, start_data, end_data;
+    unsigned long start_brk, brk, start_stack;
+    unsigned long arg_start, arg_end, env_start, env_end;
+    unsigned long mmap_base;  /* base of mmap area */
+    unsigned long total_vm;    /* Total pages mapped */
+    unsigned long locked_vm;  /* Pages that have PG_mlocked set */
+    unsigned long pinned_vm;  /* Refcount permanently increased */
+    unsigned long data_vm;    /* VM_WRITE & ~VM_SHARED & ~VM_STACK */
+    unsigned long exec_vm;    /* VM_EXEC & ~VM_WRITE & ~VM_STACK */
+    unsigned long stack_vm;    /* VM_STACK */
+
+       ...... 省略 ........
+}
+```
 
 
 内核中用 mm\_struct 结构体中的上述属性来定义上图中虚拟内存空间里的不同内存区域。
@@ -555,25 +575,27 @@ data\_vm 表示数据段中映射的内存页数目，exec\_vm 是代码段中�
 
 ==本小节中，笔者将为大家介绍一个新的结构体 vm\_area\_struct，正是这个结构体描述了这些虚拟内存区域 VMA（virtual memory area）。==
 
-    struct vm_area_struct {
-    
-    	unsigned long vm_start;		/* Our start address within vm_mm. */
-    	unsigned long vm_end;		/* The first byte after our end address
-    					   within vm_mm. */
-    	/*
-    	 * Access permissions of this VMA.
-    	 */
-    	pgprot_t vm_page_prot;
-    	unsigned long vm_flags;	
-    
-    	struct anon_vma *anon_vma;	/* Serialized by page_table_lock */
-        struct file * vm_file;		/* File we map to (can be NULL). */
-    	unsigned long vm_pgoff;		/* Offset (within vm_file) in PAGE_SIZE
-    					   units */	
-    	void * vm_private_data;		/* was vm_pte (shared mem) */
-    	/* Function pointers to deal with this struct. */
-    	const struct vm_operations_struct *vm_ops;
-    }
+```C
+struct vm_area_struct {
+
+	unsigned long vm_start;		/* Our start address within vm_mm. */
+	unsigned long vm_end;		/* The first byte after our end address
+					   within vm_mm. */
+	/*
+	 * Access permissions of this VMA.
+	 */
+	pgprot_t vm_page_prot;
+	unsigned long vm_flags;	
+
+	struct anon_vma *anon_vma;	/* Serialized by page_table_lock */
+    struct file * vm_file;		/* File we map to (can be NULL). */
+	unsigned long vm_pgoff;		/* Offset (within vm_file) in PAGE_SIZE
+					   units */	
+	void * vm_private_data;		/* was vm_pte (shared mem) */
+	/* Function pointers to deal with this struct. */
+	const struct vm_operations_struct *vm_ops;
+}
+```
 
 
 每个 vm\_area\_struct 结构对应于虚拟内存空间中的唯一虚拟内存区域 VMA，vm\_start 指向了这块虚拟内存区域的起始地址（最低地址），vm\_start 本身包含在这块虚拟内存区域内。vm\_end 指向了这块虚拟内存区域的结束地址（最高地址），而 vm\_end 本身包含在这块虚拟内存区域之外，所以 vm\_area\_struct 结构描述的是 \[vm\_start，vm\_end) 这样一段左闭右开的虚拟内存区域。
@@ -723,30 +745,32 @@ struct vm\_operations\_struct 结构中定义的都是对虚拟内存区域 VMA 
 
 我们继续来到 struct vm\_area\_struct 结构中，来看一下与组织结构相关的一些属性：
 
-    struct vm_area_struct {
-    
-    	struct vm_area_struct *vm_next, *vm_prev;
-    	struct rb_node vm_rb;
-        struct list_head anon_vma_chain; 
-    	struct mm_struct *vm_mm;	/* The address space we belong to. */
-    	
-        unsigned long vm_start;     /* Our start address within vm_mm. */
-        unsigned long vm_end;       /* The first byte after our end address
-                           within vm_mm. */
-        /*
-         * Access permissions of this VMA.
-         */
-        pgprot_t vm_page_prot;
-        unsigned long vm_flags; 
-    
-        struct anon_vma *anon_vma;  /* Serialized by page_table_lock */
-        struct file * vm_file;      /* File we map to (can be NULL). */
-        unsigned long vm_pgoff;     /* Offset (within vm_file) in PAGE_SIZE
-                           units */ 
-        void * vm_private_data;     /* was vm_pte (shared mem) */
-        /* Function pointers to deal with this struct. */
-        const struct vm_operations_struct *vm_ops;
-    }
+```C
+struct vm_area_struct {
+
+	struct vm_area_struct *vm_next, *vm_prev;
+	struct rb_node vm_rb;
+    struct list_head anon_vma_chain; 
+	struct mm_struct *vm_mm;	/* The address space we belong to. */
+	
+    unsigned long vm_start;     /* Our start address within vm_mm. */
+    unsigned long vm_end;       /* The first byte after our end address
+                       within vm_mm. */
+    /*
+     * Access permissions of this VMA.
+     */
+    pgprot_t vm_page_prot;
+    unsigned long vm_flags; 
+
+    struct anon_vma *anon_vma;  /* Serialized by page_table_lock */
+    struct file * vm_file;      /* File we map to (can be NULL). */
+    unsigned long vm_pgoff;     /* Offset (within vm_file) in PAGE_SIZE
+                       units */ 
+    void * vm_private_data;     /* was vm_pte (shared mem) */
+    /* Function pointers to deal with this struct. */
+    const struct vm_operations_struct *vm_ops;
+}
+```
 
 
 在内核中其实是通过一个 struct vm\_area\_struct 结构的双向链表将虚拟内存空间中的这些虚拟内存区域 VMA 串联起来的。
@@ -755,9 +779,11 @@ vm\_area\_struct 结构中的 vm\_next ，vm\_prev 指针分别指向 VMA 节点
 
 双向链表中的最后一个 VMA 节点的 vm\_next 指针指向 NULL，双向链表的头指针存储在内存描述符 struct mm\_struct 结构中的 mmap 中，正是这个 mmap 串联起了整个虚拟内存空间中的虚拟内存区域。
 
-    struct mm_struct {
-        struct vm_area_struct *mmap;		/* list of VMAs */
-    }
+```C
+struct mm_struct {
+    struct vm_area_struct *mmap;		/* list of VMAs */
+}
+```
 
 
 在每个虚拟内存区域 VMA 中又通过 struct vm\_area\_struct 中的 vm\_mm 指针指向了所属的虚拟内存空间 mm\_struct。
@@ -776,9 +802,11 @@ vm\_area\_struct 结构中的 vm\_next ，vm\_prev 指针分别指向 VMA 节点
 
 而红黑树中的根节点存储在内存描述符 struct mm\_struct 中的 mm\_rb 中：
 
-    struct mm_struct {
-         struct rb_root mm_rb;
-    }
+```C
+struct mm_struct {
+     struct rb_root mm_rb;
+}
+```
 
 
 ![image](image/f5fb33334855fd439205724600d237e7.png)
@@ -806,45 +834,47 @@ vm\_area\_struct 结构中的 vm\_next ，vm\_prev 指针分别指向 VMA 节点
 内核中完成这个映射过程的函数是 load\_elf\_binary ，这个函数的作用很大，加载内核的是它，启动第一个用户态进程 init 的是它，fork 完了以后，调用 exec 运行一个二进制程序的也是它。当 exec 运行一个二进制程序的时候，除了解析 ELF 的格式之外，另外一个重要的事情就是建立上述提到的内存映射。
 
 
-    static int load_elf_binary(struct linux_binprm *bprm)
-    {
-          ...... 省略 ........
-      // 设置虚拟内存空间中的内存映射区域起始地址 mmap_base
-      setup_new_exec(bprm);
-    
-         ...... 省略 ........
-      // 创建并初始化栈对应的 vm_area_struct 结构。
-      // 设置 mm->start_stack 就是栈的起始地址也就是栈底，并将 mm->arg_start 是指向栈底的。
-      retval = setup_arg_pages(bprm, randomize_stack_top(STACK_TOP),
-             executable_stack);
-    
-         ...... 省略 ........
-      // 将二进制文件中的代码部分映射到虚拟内存空间中
-      error = elf_map(bprm->file, load_bias + vaddr, elf_ppnt,
-            elf_prot, elf_flags, total_size);
-    
-         ...... 省略 ........
-     // 创建并初始化堆对应的的 vm_area_struct 结构
-     // 设置 current->mm->start_brk = current->mm->brk，设置堆的起始地址 start_brk，结束地址 brk。 起初两者相等表示堆是空的
-      retval = set_brk(elf_bss, elf_brk, bss_prot);
-    
-         ...... 省略 ........
-      // 将进程依赖的动态链接库 .so 文件映射到虚拟内存空间中的内存映射区域
-      elf_entry = load_elf_interp(&loc->interp_elf_ex,
-                  interpreter,
-                  &interp_map_addr,
-                  load_bias, interp_elf_phdata);
-    
-         ...... 省略 ........
-      // 初始化内存描述符 mm_struct
-      current->mm->end_code = end_code;
-      current->mm->start_code = start_code;
-      current->mm->start_data = start_data;
-      current->mm->end_data = end_data;
-      current->mm->start_stack = bprm->p;
-    
-         ...... 省略 ........
-    }
+```C
+static int load_elf_binary(struct linux_binprm *bprm)
+{
+      ...... 省略 ........
+  // 设置虚拟内存空间中的内存映射区域起始地址 mmap_base
+  setup_new_exec(bprm);
+
+     ...... 省略 ........
+  // 创建并初始化栈对应的 vm_area_struct 结构。
+  // 设置 mm->start_stack 就是栈的起始地址也就是栈底，并将 mm->arg_start 是指向栈底的。
+  retval = setup_arg_pages(bprm, randomize_stack_top(STACK_TOP),
+         executable_stack);
+
+     ...... 省略 ........
+  // 将二进制文件中的代码部分映射到虚拟内存空间中
+  error = elf_map(bprm->file, load_bias + vaddr, elf_ppnt,
+        elf_prot, elf_flags, total_size);
+
+     ...... 省略 ........
+ // 创建并初始化堆对应的的 vm_area_struct 结构
+ // 设置 current->mm->start_brk = current->mm->brk，设置堆的起始地址 start_brk，结束地址 brk。 起初两者相等表示堆是空的
+  retval = set_brk(elf_bss, elf_brk, bss_prot);
+
+     ...... 省略 ........
+  // 将进程依赖的动态链接库 .so 文件映射到虚拟内存空间中的内存映射区域
+  elf_entry = load_elf_interp(&loc->interp_elf_ex,
+              interpreter,
+              &interp_map_addr,
+              load_bias, interp_elf_phdata);
+
+     ...... 省略 ........
+  // 初始化内存描述符 mm_struct
+  current->mm->end_code = end_code;
+  current->mm->start_code = start_code;
+  current->mm->start_data = start_data;
+  current->mm->end_data = end_data;
+  current->mm->start_stack = bprm->p;
+
+     ...... 省略 ........
+}
+```
 
 
 -   setup\_new\_exec 设置虚拟内存空间中的内存映射区域起始地址 mmap\_base
@@ -882,10 +912,12 @@ vm\_area\_struct 结构中的 vm\_next ，vm\_prev 指针分别指向 VMA 节点
 
 在前边《5.1 内核如何划分用户态和内核态虚拟内存空间》小节中我们提到，内核在 `/arch/x86/include/asm/page_32_types.h` 文件中通过 TASK\_SIZE 将进程虚拟内存空间和内核虚拟内存空间分割开来。
 
-    /*
-     * User space process size: 3GB (default).
-     */
-    #define TASK_SIZE       __PAGE_OFFSET
+```C
+/*
+ * User space process size: 3GB (default).
+ */
+#define TASK_SIZE       __PAGE_OFFSET
+```
 
 
 > \_\_PAGE\_OFFSET 的值在 32 位系统下为 0xC000 000
@@ -972,20 +1004,24 @@ ZONE\_NORMAL 由于也是属于直接映射区的一部分，对应的物理内�
 
 VMALLOC\_START 定义在内核源码 `/arch/x86/include/asm/pgtable_32_areas.h` 文件中：
 
-    #define VMALLOC_OFFSET	(8 * 1024 * 1024)
-    
-    #define VMALLOC_START	((unsigned long)high_memory + VMALLOC_OFFSET)
+```C
+#define VMALLOC_OFFSET	(8 * 1024 * 1024)
+
+#define VMALLOC_START	((unsigned long)high_memory + VMALLOC_OFFSET)
+```
 
 
 #### 7.1.3 vmalloc 动态映射区
 
 接下来 VMALLOC\_START 到 VMALLOC\_END 之间的这块区域成为动态映射区。采用动态映射的方式映射物理内存中的高端内存。
 
-    #ifdef CONFIG_HIGHMEM
-    # define VMALLOC_END	(PKMAP_BASE - 2 * PAGE_SIZE)
-    #else
-    # define VMALLOC_END	(LDT_BASE_ADDR - 2 * PAGE_SIZE)
-    #endif
+```C
+#ifdef CONFIG_HIGHMEM
+# define VMALLOC_END	(PKMAP_BASE - 2 * PAGE_SIZE)
+#else
+# define VMALLOC_END	(LDT_BASE_ADDR - 2 * PAGE_SIZE)
+#endif
+```
 
 
 ![image](image/1399c1234bbb12d008d8c0902aec6988.png)
@@ -1004,10 +1040,12 @@ VMALLOC\_START 定义在内核源码 `/arch/x86/include/asm/pgtable_32_areas.h` 
 
 > LAST\_PKMAP 表示永久映射区可以映射的页数限制。
 
-    #define PKMAP_BASE		\
-    	((LDT_BASE_ADDR - PAGE_SIZE) & PMD_MASK)
-    
-    #define LAST_PKMAP 1024
+```C
+#define PKMAP_BASE		\
+	((LDT_BASE_ADDR - PAGE_SIZE) & PMD_MASK)
+
+#define LAST_PKMAP 1024
+```
 
 
 #### 8.1.5 固定映射区
@@ -1018,10 +1056,12 @@ VMALLOC\_START 定义在内核源码 `/arch/x86/include/asm/pgtable_32_areas.h` 
 
 FIXADDR\_START 和 FIXADDR\_TOP 定义在内核源码 `/arch/x86/include/asm/fixmap.h` 文件中：
 
-    #define FIXADDR_START		(FIXADDR_TOP - FIXADDR_SIZE)
-    
-    extern unsigned long __FIXADDR_TOP; // 0xFFFF F000
-    #define FIXADDR_TOP	((unsigned long)__FIXADDR_TOP)
+```C
+#define FIXADDR_START		(FIXADDR_TOP - FIXADDR_SIZE)
+
+extern unsigned long __FIXADDR_TOP; // 0xFFFF F000
+#define FIXADDR_TOP	((unsigned long)__FIXADDR_TOP)
+```
 
 
 在内核虚拟内存空间的直接映射区中，直接映射区中的虚拟内存地址与物理内存前 896M 的空间的映射关系都是预设好的，一比一映射。
@@ -1046,23 +1086,25 @@ FIXADDR\_START 和 FIXADDR\_TOP 定义在内核源码 `/arch/x86/include/asm/fix
 
 由于是临时映射，所以在拷贝完成之后，调用 kunmap\_atomic 将这段映射再解除掉。
 
-    size_t iov_iter_copy_from_user_atomic(struct page *page,
-        struct iov_iter *i, unsigned long offset, size_t bytes)
-    {
-      // 将缓存页临时映射到内核虚拟地址空间的临时映射区中
-      char *kaddr = kmap_atomic(page), 
-      *p = kaddr + offset;
-      // 将用户缓存区 DirectByteBuffer 中的待写入数据拷贝到文件缓存页中
-      iterate_all_kinds(i, bytes, v,
-        copyin((p += v.iov_len) - v.iov_len, v.iov_base, v.iov_len),
-        memcpy_from_page((p += v.bv_len) - v.bv_len, v.bv_page,
-             v.bv_offset, v.bv_len),
-        memcpy((p += v.iov_len) - v.iov_len, v.iov_base, v.iov_len)
-      )
-      // 解除内核虚拟地址空间与缓存页之间的临时映射，这里映射只是为了临时拷贝数据用
-      kunmap_atomic(kaddr);
-      return bytes;
-    }
+```C
+size_t iov_iter_copy_from_user_atomic(struct page *page,
+    struct iov_iter *i, unsigned long offset, size_t bytes)
+{
+  // 将缓存页临时映射到内核虚拟地址空间的临时映射区中
+  char *kaddr = kmap_atomic(page), 
+  *p = kaddr + offset;
+  // 将用户缓存区 DirectByteBuffer 中的待写入数据拷贝到文件缓存页中
+  iterate_all_kinds(i, bytes, v,
+    copyin((p += v.iov_len) - v.iov_len, v.iov_base, v.iov_len),
+    memcpy_from_page((p += v.bv_len) - v.bv_len, v.bv_page,
+         v.bv_offset, v.bv_len),
+    memcpy((p += v.iov_len) - v.iov_len, v.iov_base, v.iov_len)
+  )
+  // 解除内核虚拟地址空间与缓存页之间的临时映射，这里映射只是为了临时拷贝数据用
+  kunmap_atomic(kaddr);
+  return bytes;
+}
+```
 
 
 #### 7.1.7 32位体系结构下 Linux 虚拟内存空间整体布局
@@ -1081,14 +1123,16 @@ FIXADDR\_START 和 FIXADDR\_TOP 定义在内核源码 `/arch/x86/include/asm/fix
 
 在前边《5.1 内核如何划分用户态和内核态虚拟内存空间》小节中我们提到，内核在 `/arch/x86/include/asm/page_64_types.h` 文件中通过 TASK\_SIZE 将进程虚拟内存空间和内核虚拟内存空间分割开来。
 
-    #define TASK_SIZE		(test_thread_flag(TIF_ADDR32) ? \
-    					IA32_PAGE_OFFSET : TASK_SIZE_MAX)
-    
-    #define TASK_SIZE_MAX		task_size_max()
-    
-    #define task_size_max()		((_AC(1,UL) << __VIRTUAL_MASK_SHIFT) - PAGE_SIZE)
-    
-    #define __VIRTUAL_MASK_SHIFT	47
+```C
+#define TASK_SIZE		(test_thread_flag(TIF_ADDR32) ? \
+					IA32_PAGE_OFFSET : TASK_SIZE_MAX)
+
+#define TASK_SIZE_MAX		task_size_max()
+
+#define task_size_max()		((_AC(1,UL) << __VIRTUAL_MASK_SHIFT) - PAGE_SIZE)
+
+#define __VIRTUAL_MASK_SHIFT	47
+```
 
 
 > 64 位系统中的 TASK\_SIZE 为 0x00007FFFFFFFF000
@@ -1109,35 +1153,43 @@ FIXADDR\_START 和 FIXADDR\_TOP 定义在内核源码 `/arch/x86/include/asm/fix
 
 PAGE\_OFFSET 变量定义在 `/arch/x86/include/asm/page_64_types.h` 文件中：
 
-    #define __PAGE_OFFSET_BASE      _AC(0xffff880000000000, UL)
-    #define __PAGE_OFFSET           __PAGE_OFFSET_BASE
+```C
+#define __PAGE_OFFSET_BASE      _AC(0xffff880000000000, UL)
+#define __PAGE_OFFSET           __PAGE_OFFSET_BASE
+```
 
 
 从图中 VMALLOC\_START 到 VMALLOC\_END 的这段区域是 32T 大小的 vmalloc 映射区，这里类似用户空间中的堆，内核在这里使用 vmalloc 系统调用申请内存。
 
 VMALLOC\_START 和 VMALLOC\_END 变量定义在 `/arch/x86/include/asm/pgtable_64_types.h` 文件中：
 
-    #define __VMALLOC_BASE_L4	0xffffc90000000000UL
-    
-    #define VMEMMAP_START		__VMEMMAP_BASE_L4
-    
-    #define VMALLOC_END		(VMALLOC_START + (VMALLOC_SIZE_TB << 40) - 1)
+```C
+#define __VMALLOC_BASE_L4	0xffffc90000000000UL
+
+#define VMEMMAP_START		__VMEMMAP_BASE_L4
+
+#define VMALLOC_END		(VMALLOC_START + (VMALLOC_SIZE_TB << 40) - 1)
+```
 
 
 从 VMEMMAP\_START 开始是 1T 大小的虚拟内存映射区，用于存放物理页面的描述符 struct page 结构用来表示物理内存页。
 
 VMEMMAP\_START 变量定义在 `/arch/x86/include/asm/pgtable_64_types.h` 文件中：
 
-    #define __VMEMMAP_BASE_L4	0xffffea0000000000UL
-    
-    # define VMEMMAP_START		__VMEMMAP_BASE_L4
+```C
+#define __VMEMMAP_BASE_L4	0xffffea0000000000UL
+
+# define VMEMMAP_START		__VMEMMAP_BASE_L4
+```
 
 
 从 \_\_START\_KERNEL\_map 开始是大小为 512M 的区域用于存放内核代码段、全局变量、BSS 等。这里对应到物理内存开始的位置，减去 \_\_START\_KERNEL\_map 就能得到物理内存的地址。这里和直接映射区有点像，但是不矛盾，因为直接映射区之前有 8T 的空洞区域，早就过了内核代码在物理内存中加载的位置。
 
 \_\_START\_KERNEL\_map 变量定义在 `/arch/x86/include/asm/page_64_types.h` 文件中：
 
-    #define __START_KERNEL_map  _AC(0xffffffff80000000, UL)
+```C
+#define __START_KERNEL_map  _AC(0xffffffff80000000, UL)
+```
 
 
 #### 7.2.1 64位体系结构下 Linux 虚拟内存空间整体布局
